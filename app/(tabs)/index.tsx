@@ -35,6 +35,14 @@ type MonthlyPayment = {
   currency: string;
 };
 
+type Expense = {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  category: string;
+};
+
 const INITIAL_VISIBLE_ACCOUNTS = 4;
 
 // Добавляем константы для ключей хранилища
@@ -65,6 +73,8 @@ export default function HomeScreen() {
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
 
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
+
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const { displayCurrency, exchangeRates, isLoading } = useSettings();
   const colorScheme = useColorScheme();
@@ -118,6 +128,20 @@ export default function HomeScreen() {
       return total + convertedAmount;
     }
     return total + (payment.currency === displayCurrency ? payment.amount : 0);
+  }, 0);
+
+  // Добавляем вычисление общей суммы расходов
+  const totalExpenses = expenses.reduce((total, expense) => {
+    if (exchangeRates) {
+      const convertedAmount = convertAmount(
+        expense.amount,
+        expense.currency,
+        displayCurrency,
+        exchangeRates
+      );
+      return total + convertedAmount;
+    }
+    return total + (expense.currency === displayCurrency ? expense.amount : 0);
   }, 0);
 
   // Загрузка источников дохода при монтировании компонента
@@ -535,6 +559,25 @@ export default function HomeScreen() {
     }
   }, [incomeSources, monthlyPayments, accounts]);
 
+  // Добавляем useEffect для логирования расходов
+  useEffect(() => {
+    console.log('Current expenses:', expenses);
+    console.log('Total expenses amount:', totalExpenses);
+    console.log('Expenses by category:', groupExpensesByCategory());
+  }, [expenses, totalExpenses]);
+
+  // Вспомогательная функция для группировки расходов по категориям
+  const groupExpensesByCategory = () => {
+    return expenses.reduce((groups, expense) => {
+      const category = expense.category || 'Другое';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(expense);
+      return groups;
+    }, {} as Record<string, Expense[]>);
+  };
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView 
@@ -614,6 +657,61 @@ export default function HomeScreen() {
           {monthlyPayments.map((payment, index) => (
             <View key={payment.id}>
               {renderPayment({ item: payment, index })}
+            </View>
+          ))}
+        </ThemedView>
+
+        <ThemedView style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <ThemedText type="subtitle">Расходы</ThemedText>
+              <ThemedText style={styles.totalExpenses}>
+                Всего: {totalExpenses.toLocaleString()} {displayCurrency}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => router.push('/expense-form')}>
+              <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+            </Pressable>
+          </View>
+          {expenses.map((expense, index) => (
+            <View key={expense.id}>
+              <Pressable
+                onPress={() => router.push({
+                  pathname: '/expense-form',
+                  params: {
+                    id: expense.id,
+                    name: expense.name,
+                    currency: expense.currency,
+                    amount: expense.amount.toString(),
+                    category: expense.category,
+                  }
+                })}
+                style={({ pressed }) => [
+                  styles.expenseItem,
+                  index > 0 && styles.expenseItemBorder,
+                  pressed && styles.expenseItemPressed
+                ]}
+              >
+                <View>
+                  <ThemedText>{expense.name}</ThemedText>
+                  <ThemedText type="secondary">{expense.category}</ThemedText>
+                </View>
+                <View style={styles.expenseAmount}>
+                  <ThemedText>
+                    {expense.amount.toLocaleString()} {expense.currency}
+                  </ThemedText>
+                  {expense.currency !== displayCurrency && (
+                    <ThemedText type="secondary">
+                      {convertAmount(
+                        expense.amount,
+                        expense.currency,
+                        displayCurrency,
+                        exchangeRates
+                      ).toLocaleString()} {displayCurrency}
+                    </ThemedText>
+                  )}
+                </View>
+              </Pressable>
             </View>
           ))}
         </ThemedView>
@@ -721,5 +819,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
+  },
+  expenseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  expenseItemBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  expenseItemPressed: {
+    backgroundColor: '#F5F5F5',
+  },
+  expenseAmount: {
+    alignItems: 'flex-end',
+  },
+  totalExpenses: {
+    fontSize: 14,
+    color: Colors[colorScheme ?? 'light'].secondaryText,
   },
 });
