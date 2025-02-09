@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -26,13 +27,25 @@ type IncomeSource = {
   currency: string;
 };
 
+type MonthlyPayment = {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+};
+
 const INITIAL_VISIBLE_ACCOUNTS = 4;
+
+// Добавляем константы для ключей хранилища
+const STORAGE_KEYS = {
+  INCOME_SOURCES: 'incomeSources',
+};
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
-    action?: 'add' | 'edit' | 'add_income' | 'edit_income';
+    action?: 'add' | 'edit' | 'add_income' | 'edit_income' | 'add_payment' | 'edit_payment';
     id?: string;
     name?: string;
     currency?: string;
@@ -47,12 +60,17 @@ export default function HomeScreen() {
   ]);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([
-    { id: '1', name: 'Зарплата', amount: 150000, currency: 'RUB' },
+  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
+
+  const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([
+    { id: '1', name: 'Аренда', amount: 30000, currency: 'RUB' },
   ]);
 
   const { displayCurrency, exchangeRates, isLoading } = useSettings();
   const colorScheme = useColorScheme();
+
+  console.log('Current params:', params);
+  console.log('Current incomeSources:', incomeSources);
 
   // Вычисляем, какие счета показывать
   const visibleAccounts = isExpanded 
@@ -88,9 +106,104 @@ export default function HomeScreen() {
     return total + account.balance;
   }, 0);
 
+  // Добавляем вычисление общей суммы платежей
+  const totalMonthlyPayments = monthlyPayments.reduce((total, payment) => {
+    if (exchangeRates) {
+      const convertedAmount = convertAmount(
+        payment.amount,
+        payment.currency,
+        displayCurrency,
+        exchangeRates
+      );
+      return total + convertedAmount;
+    }
+    return total + (payment.currency === displayCurrency ? payment.amount : 0);
+  }, 0);
+
+  // Загрузка источников дохода при монтировании компонента
+  useEffect(() => {
+    const loadIncomeSources = async () => {
+      try {
+        const savedSources = await AsyncStorage.getItem(STORAGE_KEYS.INCOME_SOURCES);
+        if (savedSources) {
+          console.log('Loading saved sources:', savedSources);
+          setIncomeSources(JSON.parse(savedSources));
+        }
+      } catch (error) {
+        console.error('Error loading income sources:', error);
+      }
+    };
+
+    loadIncomeSources();
+  }, []);
+
+  // Изменяем обработчик добавления источника дохода
   useEffect(() => {
     if (params.action && params.id && params.name) {
-      if (params.action === 'add') {
+      if (params.action === 'add_income') {
+        const newIncomeSource = {
+          id: params.id!,
+          name: params.name!,
+          currency: params.currency!,
+          amount: Number(params.amount),
+        };
+        
+        // Обновляем состояние и AsyncStorage атомарно
+        const updateIncomeSources = async () => {
+          try {
+            // Получаем текущие данные из AsyncStorage
+            const savedSourcesJson = await AsyncStorage.getItem(STORAGE_KEYS.INCOME_SOURCES);
+            const savedSources = savedSourcesJson ? JSON.parse(savedSourcesJson) : [];
+            
+            // Проверяем на дубликаты
+            const exists = savedSources.some(source => source.id === newIncomeSource.id);
+            if (exists) {
+              return;
+            }
+
+            // Создаем обновленный массив
+            const updatedSources = [...savedSources, newIncomeSource];
+            
+            // Сохраняем в AsyncStorage
+            await AsyncStorage.setItem(STORAGE_KEYS.INCOME_SOURCES, JSON.stringify(updatedSources));
+            
+            // Обновляем состояние компонента
+            setIncomeSources(updatedSources);
+            
+            console.log('Successfully saved and updated income sources:', updatedSources);
+          } catch (error) {
+            console.error('Error updating income sources:', error);
+          }
+        };
+
+        updateIncomeSources();
+      } else if (params.action === 'edit_income') {
+        // Обновляем редактирование аналогичным образом
+        const updateEditedSource = async () => {
+          try {
+            const savedSourcesJson = await AsyncStorage.getItem(STORAGE_KEYS.INCOME_SOURCES);
+            const savedSources = savedSourcesJson ? JSON.parse(savedSourcesJson) : [];
+            
+            const updatedSources = savedSources.map(income => 
+              income.id === params.id 
+                ? {
+                    id: params.id!,
+                    name: params.name!,
+                    currency: params.currency!,
+                    amount: Number(params.amount),
+                  }
+                : income
+            );
+            
+            await AsyncStorage.setItem(STORAGE_KEYS.INCOME_SOURCES, JSON.stringify(updatedSources));
+            setIncomeSources(updatedSources);
+          } catch (error) {
+            console.error('Error updating edited source:', error);
+          }
+        };
+
+        updateEditedSource();
+      } else if (params.action === 'add') {
         setAccounts(prev => [...prev, {
           id: params.id!,
           name: params.name!,
@@ -108,36 +221,30 @@ export default function HomeScreen() {
               }
             : account
         ));
+      } else if (params.action === 'add_payment') {
+        setMonthlyPayments(prev => [...prev, {
+          id: params.id!,
+          name: params.name!,
+          currency: params.currency!,
+          amount: Number(params.amount),
+        }]);
+      } else if (params.action === 'edit_payment') {
+        setMonthlyPayments(prev => prev.map(payment => 
+          payment.id === params.id 
+            ? {
+                id: params.id!,
+                name: params.name!,
+                currency: params.currency!,
+                amount: Number(params.amount),
+              }
+            : payment
+        ));
       }
       
-      // Очищаем параметры URL после обработки
+      // Очищаем параметры после обработки
       router.setParams({});
     }
-  }, [params.action, params.id, params.name]);
-
-  useEffect(() => {
-    if (params.action === 'add_income' && params.id && params.name && params.currency && params.amount) {
-      const newIncome: IncomeSource = {
-        id: params.id,
-        name: params.name,
-        currency: params.currency,
-        amount: Number(params.amount),
-      };
-      
-      setIncomeSources(prev => {
-        // Проверяем, существует ли уже источник дохода с таким id
-        const exists = prev.some(income => income.id === params.id);
-        if (exists) {
-          // Если существует - обновляем
-          return prev.map(income => 
-            income.id === params.id ? newIncome : income
-          );
-        }
-        // Если нет - добавляем новый
-        return [...prev, newIncome];
-      });
-    }
-  }, [params.action, params.id, params.name, params.currency, params.amount, params.timestamp]);
+  }, [params.action, params.id, params.name, params.currency, params.amount]);
 
   const handleDelete = (id: string) => {
     Alert.alert(
@@ -164,6 +271,21 @@ export default function HomeScreen() {
           text: 'Удалить',
           style: 'destructive',
           onPress: () => setIncomeSources(prev => prev.filter(source => source.id !== id))
+        },
+      ]
+    );
+  };
+
+  const handleDeletePayment = (id: string) => {
+    Alert.alert(
+      'Удаление платежа',
+      'Вы уверены, что хотите удалить этот платеж?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => setMonthlyPayments(prev => prev.filter(payment => payment.id !== id))
         },
       ]
     );
@@ -242,6 +364,41 @@ export default function HomeScreen() {
   };
 
   const renderIncomeSource = ({ item, index }: { item: IncomeSource; index: number }) => {
+    console.log('Rendering income source:', item);
+    return (
+      <Pressable 
+        onPress={() => router.push({
+          pathname: '/income-form',
+          params: {
+            id: item.id,
+            name: item.name,
+            currency: item.currency,
+            amount: item.amount.toString(),
+          }
+        })}
+        onLongPress={() => handleDeleteIncome(item.id)}
+        style={({ pressed }) => [
+          styles.accountCard,
+          index > 0 && styles.accountCardBorder,
+          pressed && styles.accountCardPressed
+        ]}
+      >
+        <ThemedView style={styles.accountHeader}>
+          <ThemedText type="subtitle">{item.name}</ThemedText>
+          <View>
+            <ThemedText>{item.amount.toLocaleString()} {item.currency}</ThemedText>
+            {item.currency !== displayCurrency && exchangeRates && (
+              <ThemedText style={styles.convertedAmount}>
+                ≈ {convertAmount(item.amount, item.currency, displayCurrency, exchangeRates).toLocaleString()} {displayCurrency}
+              </ThemedText>
+            )}
+          </View>
+        </ThemedView>
+      </Pressable>
+    );
+  };
+
+  const renderPayment = ({ item, index }: { item: MonthlyPayment; index: number }) => {
     const convertedAmount = exchangeRates && item.currency !== displayCurrency
       ? convertAmount(
           item.amount,
@@ -254,10 +411,10 @@ export default function HomeScreen() {
     return (
       <Pressable 
         onPress={() => router.push({
-          pathname: '/income-form',
+          pathname: '/payment-form',
           params: item
         })}
-        onLongPress={() => handleDeleteIncome(item.id)}
+        onLongPress={() => handleDeletePayment(item.id)}
         style={({ pressed }) => [
           styles.accountCard,
           index > 0 && styles.accountCardBorder,
@@ -266,7 +423,14 @@ export default function HomeScreen() {
       >
         <ThemedView style={styles.accountHeader}>
           <ThemedText type="subtitle">{item.name}</ThemedText>
-          {renderAmount(item.amount, item.currency)}
+          <View>
+            <ThemedText>{item.amount.toLocaleString()} {item.currency}</ThemedText>
+            {convertedAmount && (
+              <ThemedText style={styles.convertedAmount}>
+                ≈ {convertedAmount.toLocaleString()} {displayCurrency}
+              </ThemedText>
+            )}
+          </View>
         </ThemedView>
       </Pressable>
     );
@@ -321,6 +485,25 @@ export default function HomeScreen() {
         {incomeSources.map((source, index) => (
           <View key={source.id}>
             {renderIncomeSource({ item: source, index })}
+          </View>
+        ))}
+      </ThemedView>
+
+      <ThemedView style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <ThemedText type="subtitle">Ежемесячные платежи</ThemedText>
+            <ThemedText style={styles.totalPayments}>
+              Всего: {totalMonthlyPayments.toLocaleString()} {displayCurrency}
+            </ThemedText>
+          </View>
+          <Pressable onPress={() => router.push('/payment-form')}>
+            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+          </Pressable>
+        </View>
+        {monthlyPayments.map((payment, index) => (
+          <View key={payment.id}>
+            {renderPayment({ item: payment, index })}
           </View>
         ))}
       </ThemedView>
@@ -412,6 +595,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   totalBalance: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
+  },
+  totalPayments: {
     fontSize: 14,
     color: Colors.light.secondaryText,
     marginTop: 4,

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,30 +28,14 @@ export default function IncomeFormScreen() {
   const [amount, setAmount] = useState(params.amount ?? '0');
   const [showCurrencies, setShowCurrencies] = useState(false);
 
-  const formatAmount = (text: string) => {
-    const numbers = text.replace(/[^0-9.]/g, '');
-    if (numbers) {
-      const parts = numbers.split('.');
-      if (parts.length > 2) return amount;
-      
-      const integerPart = parseInt(parts[0], 10).toLocaleString();
-      
-      if (parts.length === 2) {
-        return `${integerPart}.${parts[1]}`;
-      }
-      return integerPart;
-    }
-    return '';
-  };
-
   const handleSave = () => {
     if (!name.trim()) {
       Alert.alert('Ошибка', 'Введите название источника дохода');
       return;
     }
 
-    const numAmount = Number(amount.replace(/[^0-9.]+/g, ''));
-    if (isNaN(numAmount)) {
+    const numAmount = Number(amount.replace(/[^0-9.-]+/g, ''));
+    if (isNaN(numAmount) || numAmount <= 0) {
       Alert.alert('Ошибка', 'Введите корректную сумму');
       return;
     }
@@ -64,13 +48,28 @@ export default function IncomeFormScreen() {
         name: name.trim(),
         currency,
         amount: numAmount,
-        timestamp: Date.now(),
       },
     });
   };
 
   const handleClose = () => {
     router.back();
+  };
+
+  const formatAmount = (text: string) => {
+    const numbers = text.replace(/[^0-9.]/g, '');
+    if (numbers) {
+      const parts = numbers.split('.');
+      if (parts.length > 2) return amount;
+      
+      const integerPart = parts[0] ? parseInt(parts[0], 10).toLocaleString() : '0';
+      
+      if (parts.length === 2) {
+        return `${integerPart}.${parts[1]}`;
+      }
+      return integerPart;
+    }
+    return '';
   };
 
   return (
@@ -82,7 +81,8 @@ export default function IncomeFormScreen() {
       <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <Stack.Screen
           options={{
-            title: params.id ? 'Редактировать доход' : 'Новый источник дохода',
+            headerShown: true,
+            title: params.id ? 'Редактировать доход' : 'Новый доход',
             headerLeft: () => (
               <Pressable 
                 onPress={handleClose}
@@ -117,7 +117,7 @@ export default function IncomeFormScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.formContent}
         >
-          <View style={styles.inputContainer}>
+          <ThemedView style={styles.inputContainer}>
             <ThemedText type="subtitle">Название</ThemedText>
             <TextInput
               style={[styles.input, { color: Colors[colorScheme ?? 'light'].text }]}
@@ -127,29 +127,26 @@ export default function IncomeFormScreen() {
               placeholderTextColor="#999"
               autoFocus
             />
-          </View>
+          </ThemedView>
 
-          <View style={styles.inputContainer}>
+          <ThemedView style={styles.inputContainer}>
             <ThemedText type="subtitle">Валюта</ThemedText>
             <Pressable onPress={() => setShowCurrencies(!showCurrencies)}>
               <TextInput
                 style={[styles.input, { color: Colors[colorScheme ?? 'light'].text }]}
                 value={currency}
+                onChangeText={setCurrency}
                 placeholder="RUB"
                 placeholderTextColor="#999"
                 editable={false}
-                pointerEvents="none"
               />
             </Pressable>
             {showCurrencies && (
-              <View style={styles.currencyList}>
+              <ThemedView style={styles.currencyList}>
                 {CURRENCIES.map((curr) => (
                   <Pressable
                     key={curr}
-                    style={[
-                      styles.currencyItem,
-                      curr === currency && styles.selectedCurrency
-                    ]}
+                    style={styles.currencyItem}
                     onPress={() => {
                       setCurrency(curr);
                       setShowCurrencies(false);
@@ -158,11 +155,11 @@ export default function IncomeFormScreen() {
                     <ThemedText>{curr}</ThemedText>
                   </Pressable>
                 ))}
-              </View>
+              </ThemedView>
             )}
-          </View>
+          </ThemedView>
 
-          <View style={styles.inputContainer}>
+          <ThemedView style={styles.inputContainer}>
             <ThemedText type="subtitle">Сумма</ThemedText>
             <TextInput
               style={[styles.input, { color: Colors[colorScheme ?? 'light'].text }]}
@@ -172,7 +169,7 @@ export default function IncomeFormScreen() {
               placeholder="0"
               placeholderTextColor="#999"
             />
-          </View>
+          </ThemedView>
         </ScrollView>
       </ThemedView>
     </KeyboardAvoidingView>
