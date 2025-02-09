@@ -8,6 +8,8 @@ import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { colorScheme } from '@/constants/Colors';
+import { useSettings } from '@/contexts/SettingsContext';
+import { convertAmount } from '@/utils/currencyConverter';
 
 type Account = {
   id: string;
@@ -34,6 +36,8 @@ export default function HomeScreen() {
     { id: '2', name: 'Банк', currency: 'RUB', balance: 50000 },
   ]);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const { displayCurrency, exchangeRates, isLoading } = useSettings();
 
   // Вычисляем, какие счета показывать
   const visibleAccounts = isExpanded 
@@ -107,6 +111,20 @@ export default function HomeScreen() {
     </Pressable>
   );
 
+  const calculateTotal = () => {
+    if (!exchangeRates) return 0;
+    
+    return accounts.reduce((total, account) => {
+      const convertedAmount = convertAmount(
+        account.balance,
+        account.currency,
+        displayCurrency,
+        exchangeRates
+      );
+      return total + convertedAmount;
+    }, 0);
+  };
+
   return (
     <ThemedView style={[
       styles.container,
@@ -122,6 +140,16 @@ export default function HomeScreen() {
         <Pressable onPress={() => router.push('/account-form')}>
           <IconSymbol name="plus.circle.fill" size={32} color="#0a7ea4" />
         </Pressable>
+      </ThemedView>
+      
+      <ThemedView style={styles.totalContainer}>
+        {isLoading ? (
+          <ThemedText>Загрузка курсов валют...</ThemedText>
+        ) : (
+          <ThemedText type="defaultSemiBold">
+            Всего: {calculateTotal().toLocaleString()} {displayCurrency}
+          </ThemedText>
+        )}
       </ThemedView>
       
       <ThemedView style={styles.accountsContainer}>
@@ -198,5 +226,8 @@ const styles = StyleSheet.create({
   },
   expandButtonPressed: {
     backgroundColor: '#F5F5F5',
+  },
+  totalContainer: {
+    marginBottom: 16,
   },
 });
