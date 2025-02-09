@@ -49,19 +49,21 @@ const INITIAL_VISIBLE_ACCOUNTS = 4;
 const STORAGE_KEYS = {
   INCOME_SOURCES: 'incomeSources',
   MONTHLY_PAYMENTS: 'monthlyPayments',
+  EXPENSES: 'expenses'
 };
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
-    action?: 'add' | 'edit' | 'add_income' | 'edit_income' | 'add_payment' | 'edit_payment';
+    action?: 'add' | 'edit' | 'add_income' | 'edit_income' | 'add_payment' | 'edit_payment' | 'add_expense' | 'edit_expense';
     id?: string;
     name?: string;
     currency?: string;
     balance?: string;
     amount?: string;
     timestamp?: string;
+    category?: string;
   }>();
 
   const [accounts, setAccounts] = useState<Account[]>([
@@ -177,6 +179,68 @@ export default function HomeScreen() {
 
     loadMonthlyPayments();
   }, []);
+
+  // Загрузка расходов при монтировании
+  useEffect(() => {
+    const loadExpenses = async () => {
+      try {
+        const savedExpensesJson = await AsyncStorage.getItem(STORAGE_KEYS.EXPENSES);
+        if (savedExpensesJson) {
+          const savedExpenses = JSON.parse(savedExpensesJson);
+          setExpenses(savedExpenses);
+          console.log('Loaded expenses:', savedExpenses);
+        }
+      } catch (error) {
+        console.error('Error loading expenses:', error);
+      }
+    };
+
+    loadExpenses();
+  }, []); // Выполнится один раз при монтировании
+
+  // Исправляем обработчик параметров для расходов
+  useEffect(() => {
+    const handleExpenseAction = async () => {
+      if (params.action === 'add_expense' || params.action === 'edit_expense') {
+        const newExpense: Expense = {
+          id: params.id!,
+          name: params.name!,
+          amount: Number(params.amount),
+          currency: params.currency!,
+          category: params.category!
+        };
+
+        try {
+          // Получаем текущие расходы из AsyncStorage
+          const savedExpensesJson = await AsyncStorage.getItem(STORAGE_KEYS.EXPENSES);
+          let currentExpenses: Expense[] = savedExpensesJson ? JSON.parse(savedExpensesJson) : [];
+
+          if (params.action === 'add_expense') {
+            // Проверяем на дубликаты
+            if (!currentExpenses.some(expense => expense.id === newExpense.id)) {
+              currentExpenses = [...currentExpenses, newExpense];
+            }
+          } else {
+            currentExpenses = currentExpenses.map(expense => 
+              expense.id === newExpense.id ? newExpense : expense
+            );
+          }
+
+          // Сохраняем обновленный список в AsyncStorage
+          await AsyncStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(currentExpenses));
+          
+          // Обновляем состояние
+          setExpenses(currentExpenses);
+          
+          console.log('Updated expenses:', currentExpenses);
+        } catch (error) {
+          console.error('Error handling expense action:', error);
+        }
+      }
+    };
+
+    handleExpenseAction();
+  }, [params.action, params.id, params.name, params.amount, params.currency, params.category]); // Добавляем все зависимости
 
   // Изменяем обработчик добавления источника дохода
   useEffect(() => {
@@ -322,7 +386,7 @@ export default function HomeScreen() {
       // Очищаем параметры после обработки
       router.setParams({});
     }
-  }, [params.action, params.id, params.name, params.currency, params.amount]);
+  }, [params.action, params.id, params.name, params.currency, params.amount, params.category]);
 
   const handleDelete = (id: string) => {
     Alert.alert(
@@ -577,6 +641,45 @@ export default function HomeScreen() {
       return groups;
     }, {} as Record<string, Expense[]>);
   };
+
+  // Добавляем функцию удаления расхода
+  const handleDeleteExpense = async (id: string) => {
+    Alert.alert(
+      'Удаление расхода',
+      'Вы уверены, что хотите удалить этот расход?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedExpenses = expenses.filter(expense => expense.id !== id);
+              await AsyncStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
+              setExpenses(updatedExpenses);
+            } catch (error) {
+              console.error('Error deleting expense:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // В начале компонента HomeScreen
+  useEffect(() => {
+    const debugStorage = async () => {
+      const allKeys = await AsyncStorage.getAllKeys();
+      console.log('All storage keys:', allKeys);
+      
+      for (const key of allKeys) {
+        const value = await AsyncStorage.getItem(key);
+        console.log(`Storage ${key}:`, value);
+      }
+    };
+
+    debugStorage();
+  }, [expenses]); // Логируем при каждом изменении expenses
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
