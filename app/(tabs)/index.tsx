@@ -18,6 +18,13 @@ type Account = {
   balance: number;
 };
 
+type IncomeSource = {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+};
+
 const INITIAL_VISIBLE_ACCOUNTS = 4;
 
 export default function HomeScreen() {
@@ -36,6 +43,10 @@ export default function HomeScreen() {
     { id: '2', name: 'Банк', currency: 'RUB', balance: 50000 },
   ]);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([
+    { id: '1', name: 'Зарплата', amount: 150000, currency: 'RUB' },
+  ]);
 
   const { displayCurrency, exchangeRates, isLoading } = useSettings();
 
@@ -83,6 +94,21 @@ export default function HomeScreen() {
           text: 'Удалить',
           style: 'destructive',
           onPress: () => setAccounts(prev => prev.filter(account => account.id !== id))
+        },
+      ]
+    );
+  };
+
+  const handleDeleteIncome = (id: string) => {
+    Alert.alert(
+      'Удаление источника дохода',
+      'Вы уверены, что хотите удалить этот источник дохода?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => setIncomeSources(prev => prev.filter(source => source.id !== id))
         },
       ]
     );
@@ -154,6 +180,50 @@ export default function HomeScreen() {
     );
   };
 
+  const renderIncomeSource = ({ item, index }: { item: IncomeSource; index: number }) => {
+    const convertedAmount = exchangeRates && item.currency !== displayCurrency
+      ? convertAmount(
+          item.amount,
+          item.currency,
+          displayCurrency,
+          exchangeRates
+        )
+      : null;
+
+    return (
+      <Pressable 
+        onPress={() => router.push({
+          pathname: '/income-form',
+          params: item
+        })}
+        onLongPress={() => handleDeleteIncome(item.id)}
+        style={({ pressed }) => [
+          styles.accountCard,
+          index > 0 && styles.accountCardBorder,
+          pressed && styles.accountCardPressed
+        ]}
+      >
+        <ThemedView style={styles.accountHeader}>
+          <ThemedText type="subtitle">{item.name}</ThemedText>
+          <ThemedText type="defaultSemiBold">{item.currency}</ThemedText>
+        </ThemedView>
+        <ThemedView>
+          <ThemedText type="title">
+            {item.amount.toLocaleString()} {item.currency}
+          </ThemedText>
+          {convertedAmount !== null && item.currency !== displayCurrency && (
+            <ThemedText style={styles.convertedAmount}>
+              ≈ {convertedAmount.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2
+              })} {displayCurrency}
+            </ThemedText>
+          )}
+        </ThemedView>
+      </Pressable>
+    );
+  };
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 16, paddingHorizontal: 16 }]}>
       <ThemedView style={styles.header}>
@@ -202,6 +272,21 @@ export default function HomeScreen() {
             />
           </Pressable>
         )}
+      </ThemedView>
+
+      <ThemedView style={styles.section}>
+        <ThemedView style={styles.sectionHeader}>
+          <ThemedText type="title">Источники дохода</ThemedText>
+          <Pressable onPress={() => router.push('/income-form')}>
+            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+          </Pressable>
+        </ThemedView>
+
+        {incomeSources.map((source, index) => (
+          <View key={source.id}>
+            {renderIncomeSource({ item: source, index })}
+          </View>
+        ))}
       </ThemedView>
     </ThemedView>
   );
@@ -264,5 +349,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors[colorScheme ?? 'light'].secondaryText,
     marginTop: 4,
+  },
+  section: {
+    marginTop: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
 });
