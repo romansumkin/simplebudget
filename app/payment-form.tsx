@@ -129,24 +129,33 @@ export default function PaymentFormScreen() {
             />
           </ThemedView>
 
-          <ThemedView style={styles.inputContainer}>
+          <ThemedView style={[styles.inputContainer, styles.currencyContainer]}>
             <ThemedText type="subtitle">Валюта</ThemedText>
-            <Pressable onPress={() => setShowCurrencies(!showCurrencies)}>
+            <Pressable 
+              onPress={() => setShowCurrencies(!showCurrencies)}
+              style={styles.currencyButton}
+            >
               <TextInput
                 style={[styles.input, { color: Colors[colorScheme ?? 'light'].text }]}
                 value={currency}
-                onChangeText={setCurrency}
                 placeholder="RUB"
                 placeholderTextColor="#999"
                 editable={false}
+                pointerEvents="none"
               />
             </Pressable>
             {showCurrencies && (
-              <ThemedView style={styles.currencyList}>
+              <ThemedView style={[
+                styles.currencyList,
+                { backgroundColor: Colors[colorScheme ?? 'light'].background }
+              ]}>
                 {CURRENCIES.map((curr) => (
                   <Pressable
                     key={curr}
-                    style={styles.currencyItem}
+                    style={[
+                      styles.currencyItem,
+                      currency === curr && styles.selectedCurrency
+                    ]}
                     onPress={() => {
                       setCurrency(curr);
                       setShowCurrencies(false);
@@ -198,18 +207,28 @@ const styles = StyleSheet.create({
   headerButtonPressed: {
     opacity: 0.7,
   },
+  currencyButton: {
+    width: '100%',
+  },
+  currencyContainer: {
+    position: 'relative',
+    zIndex: 2,
+  },
   currencyList: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
     borderRadius: 8,
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   currencyItem: {
     padding: 12,

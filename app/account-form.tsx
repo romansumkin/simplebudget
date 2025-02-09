@@ -129,7 +129,7 @@ export default function AccountFormScreen() {
             />
           </ThemedView>
 
-          <ThemedView style={styles.inputContainer}>
+          <ThemedView style={[styles.inputContainer, styles.currencyContainer]}>
             <ThemedText type="subtitle">Валюта</ThemedText>
             <Pressable onPress={() => setShowCurrencies(!showCurrencies)}>
               <TextInput
@@ -142,11 +142,17 @@ export default function AccountFormScreen() {
               />
             </Pressable>
             {showCurrencies && (
-              <ThemedView style={styles.currencyList}>
+              <ThemedView style={[
+                styles.currencyList,
+                { backgroundColor: Colors[colorScheme ?? 'light'].background }
+              ]}>
                 {CURRENCIES.map((curr) => (
                   <Pressable
                     key={curr}
-                    style={styles.currencyItem}
+                    style={[
+                      styles.currencyItem,
+                      currency === curr && styles.selectedCurrency
+                    ]}
                     onPress={() => {
                       setCurrency(curr);
                       setShowCurrencies(false);
@@ -198,6 +204,10 @@ const styles = StyleSheet.create({
   headerButtonPressed: {
     opacity: 0.7,
   },
+  currencyContainer: {
+    position: 'relative',
+    zIndex: 1,
+  },
   currencyList: {
     position: 'absolute',
     top: '100%',
@@ -210,16 +220,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   currencyItem: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
-  formContent: {
-    paddingBottom: 24,
-  },
   selectedCurrency: {
     backgroundColor: '#E5E5F5',
+  },
+  formContent: {
+    paddingBottom: 24,
   },
 }); 
