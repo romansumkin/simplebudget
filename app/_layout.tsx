@@ -37,14 +37,14 @@ export default function RootLayout() {
             name="account-form" 
             options={{ 
               presentation: 'modal',
-              headerShown: false,
+              headerShown: true,
             }} 
           />
           <Stack.Screen 
             name="income-form" 
             options={{ 
               presentation: 'modal',
-              headerShown: false,
+              headerShown: true,
             }} 
           />
           <Stack.Screen name="+not-found" />

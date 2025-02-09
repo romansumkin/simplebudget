@@ -57,10 +57,17 @@ export default function AccountFormScreen() {
   };
 
   const formatBalance = (text: string) => {
-    const numbers = text.replace(/[^0-9]/g, '');
+    const numbers = text.replace(/[^0-9.]/g, '');
     if (numbers) {
-      const num = parseInt(numbers, 10);
-      return num.toLocaleString();
+      const parts = numbers.split('.');
+      if (parts.length > 2) return balance;
+      
+      const integerPart = parseInt(parts[0], 10).toLocaleString();
+      
+      if (parts.length === 2) {
+        return `${integerPart}.${parts[1]}`;
+      }
+      return integerPart;
     }
     return '';
   };
@@ -69,6 +76,7 @@ export default function AccountFormScreen() {
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <Stack.Screen
@@ -104,7 +112,11 @@ export default function AccountFormScreen() {
           }}
         />
 
-        <ScrollView style={styles.form}>
+        <ScrollView 
+          style={styles.form}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.formContent}
+        >
           <ThemedView style={styles.inputContainer}>
             <ThemedText type="subtitle">Название</ThemedText>
             <TextInput
@@ -153,7 +165,7 @@ export default function AccountFormScreen() {
               style={[styles.input, { color: Colors[colorScheme ?? 'light'].text }]}
               value={balance}
               onChangeText={(text) => setBalance(formatBalance(text))}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               placeholder="0"
               placeholderTextColor="#999"
             />
@@ -203,5 +215,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
+  },
+  formContent: {
+    paddingBottom: 24,
+  },
+  selectedCurrency: {
+    backgroundColor: '#E5E5F5',
   },
 }); 

@@ -31,11 +31,13 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
-    action?: 'add' | 'edit';
+    action?: 'add' | 'edit' | 'add_income' | 'edit_income';
     id?: string;
     name?: string;
     currency?: string;
     balance?: string;
+    amount?: string;
+    timestamp?: string;
   }>();
 
   const [accounts, setAccounts] = useState<Account[]>([
@@ -56,6 +58,20 @@ export default function HomeScreen() {
     : accounts.slice(0, INITIAL_VISIBLE_ACCOUNTS);
 
   const hasHiddenAccounts = accounts.length > INITIAL_VISIBLE_ACCOUNTS;
+
+  // Добавляем вычисление общей суммы доходов
+  const totalIncome = incomeSources.reduce((total, income) => {
+    if (exchangeRates) {
+      const convertedAmount = convertAmount(
+        income.amount,
+        income.currency,
+        displayCurrency,
+        exchangeRates
+      );
+      return total + convertedAmount;
+    }
+    return total + (income.currency === displayCurrency ? income.amount : 0);
+  }, 0);
 
   useEffect(() => {
     if (params.action && params.id && params.name) {
@@ -83,6 +99,30 @@ export default function HomeScreen() {
       router.setParams({});
     }
   }, [params.action, params.id, params.name]);
+
+  useEffect(() => {
+    if (params.action === 'add_income' && params.id && params.name && params.currency && params.amount) {
+      const newIncome: IncomeSource = {
+        id: params.id,
+        name: params.name,
+        currency: params.currency,
+        amount: Number(params.amount),
+      };
+      
+      setIncomeSources(prev => {
+        // Проверяем, существует ли уже источник дохода с таким id
+        const exists = prev.some(income => income.id === params.id);
+        if (exists) {
+          // Если существует - обновляем
+          return prev.map(income => 
+            income.id === params.id ? newIncome : income
+          );
+        }
+        // Если нет - добавляем новый
+        return [...prev, newIncome];
+      });
+    }
+  }, [params.action, params.id, params.name, params.currency, params.amount, params.timestamp]);
 
   const handleDelete = (id: string) => {
     Alert.alert(
@@ -247,6 +287,11 @@ export default function HomeScreen() {
         )}
       </ThemedView>
       
+      <ThemedView style={styles.totalContainer}>
+        <ThemedText type="subtitle">Общая сумма доходов</ThemedText>
+        <ThemedText type="title">{totalIncome.toLocaleString()} {displayCurrency}</ThemedText>
+      </ThemedView>
+
       <ThemedView style={styles.accountsContainer}>
         {visibleAccounts.map((account, index) => (
           <View key={account.id}>
