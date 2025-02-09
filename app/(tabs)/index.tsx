@@ -88,66 +88,91 @@ export default function HomeScreen() {
     );
   };
 
-  const renderAccount = ({ item, index }: { item: Account; index: number }) => (
-    <Pressable 
-      onPress={() => router.push({
-        pathname: '/account-form',
-        params: item
-      })}
-      onLongPress={() => handleDelete(item.id)}
-      style={({ pressed }) => [
-        styles.accountCard,
-        index > 0 && styles.accountCardBorder,
-        pressed && styles.accountCardPressed
-      ]}
-    >
-      <ThemedView style={styles.accountHeader}>
-        <ThemedText type="subtitle">{item.name}</ThemedText>
-        <ThemedText type="defaultSemiBold">{item.currency}</ThemedText>
-      </ThemedView>
-      <ThemedText type="title">
-        {item.balance.toLocaleString()} {item.currency}
-      </ThemedText>
-    </Pressable>
-  );
+  const calculateTotalBalance = (
+    accounts: Account[],
+    targetCurrency: string,
+    rates: ExchangeRates | null
+  ): number => {
+    if (!rates) return 0;
 
-  const calculateTotal = () => {
-    if (!exchangeRates) return 0;
-    
     return accounts.reduce((total, account) => {
+      if (account.currency === targetCurrency) {
+        return total + account.balance;
+      }
+
       const convertedAmount = convertAmount(
         account.balance,
         account.currency,
-        displayCurrency,
-        exchangeRates
+        targetCurrency,
+        rates
       );
       return total + convertedAmount;
     }, 0);
   };
 
+  const renderAccount = ({ item, index }: { item: Account; index: number }) => {
+    const convertedBalance = exchangeRates && item.currency !== displayCurrency
+      ? convertAmount(
+          item.balance,
+          item.currency,
+          displayCurrency,
+          exchangeRates
+        )
+      : null;
+
+    return (
+      <Pressable 
+        onPress={() => router.push({
+          pathname: '/account-form',
+          params: item
+        })}
+        onLongPress={() => handleDelete(item.id)}
+        style={({ pressed }) => [
+          styles.accountCard,
+          index > 0 && styles.accountCardBorder,
+          pressed && styles.accountCardPressed
+        ]}
+      >
+        <ThemedView style={styles.accountHeader}>
+          <ThemedText type="subtitle">{item.name}</ThemedText>
+          <ThemedText type="defaultSemiBold">{item.currency}</ThemedText>
+        </ThemedView>
+        <ThemedView>
+          <ThemedText type="title">
+            {item.balance.toLocaleString()} {item.currency}
+          </ThemedText>
+          {convertedBalance !== null && item.currency !== displayCurrency && (
+            <ThemedText style={styles.convertedAmount}>
+              ≈ {convertedBalance.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2
+              })} {displayCurrency}
+            </ThemedText>
+          )}
+        </ThemedView>
+      </Pressable>
+    );
+  };
+
   return (
-    <ThemedView style={[
-      styles.container,
-      {
-        paddingTop: insets.top,
-        paddingBottom: insets.bottom,
-        paddingLeft: Math.max(16, insets.left),
-        paddingRight: Math.max(16, insets.right),
-      }
-    ]}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 16, paddingHorizontal: 16 }]}>
       <ThemedView style={styles.header}>
         <ThemedText type="title">Счета</ThemedText>
         <Pressable onPress={() => router.push('/account-form')}>
-          <IconSymbol name="plus.circle.fill" size={32} color="#0a7ea4" />
+          <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
         </Pressable>
       </ThemedView>
-      
+
       <ThemedView style={styles.totalContainer}>
+        <ThemedText type="subtitle">Общий баланс</ThemedText>
         {isLoading ? (
           <ThemedText>Загрузка курсов валют...</ThemedText>
         ) : (
-          <ThemedText type="defaultSemiBold">
-            Всего: {calculateTotal().toLocaleString()} {displayCurrency}
+          <ThemedText type="title">
+            {calculateTotalBalance(accounts, displayCurrency, exchangeRates).toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+              minimumFractionDigits: 2
+            })} {displayCurrency}
           </ThemedText>
         )}
       </ThemedView>
@@ -229,5 +254,15 @@ const styles = StyleSheet.create({
   },
   totalContainer: {
     marginBottom: 16,
+    padding: 16,
+    backgroundColor: Colors.light.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  convertedAmount: {
+    fontSize: 14,
+    color: Colors[colorScheme ?? 'light'].secondaryText,
+    marginTop: 4,
   },
 });

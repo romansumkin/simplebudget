@@ -22,7 +22,9 @@ export function convertAmount(
   rates: ExchangeRates
 ): number {
   if (fromCurrency === toCurrency) return amount;
-  if (!rates[toCurrency]) return amount;
+  if (!rates[fromCurrency] || !rates[toCurrency]) return amount;
   
-  return amount * rates[toCurrency];
+  // Сначала конвертируем в базовую валюту, затем в целевую
+  const amountInBaseCurrency = amount / rates[fromCurrency];
+  return amountInBaseCurrency * rates[toCurrency];
 } 
