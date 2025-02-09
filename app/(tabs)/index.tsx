@@ -39,6 +39,7 @@ const INITIAL_VISIBLE_ACCOUNTS = 4;
 // Добавляем константы для ключей хранилища
 const STORAGE_KEYS = {
   INCOME_SOURCES: 'incomeSources',
+  MONTHLY_PAYMENTS: 'monthlyPayments',
 };
 
 export default function HomeScreen() {
@@ -62,9 +63,7 @@ export default function HomeScreen() {
 
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
 
-  const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([
-    { id: '1', name: 'Аренда', amount: 30000, currency: 'RUB' },
-  ]);
+  const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
 
   const { displayCurrency, exchangeRates, isLoading } = useSettings();
   const colorScheme = useColorScheme();
@@ -135,6 +134,23 @@ export default function HomeScreen() {
     };
 
     loadIncomeSources();
+  }, []);
+
+  // Добавляем загрузку платежей при монтировании
+  useEffect(() => {
+    const loadMonthlyPayments = async () => {
+      try {
+        const savedPayments = await AsyncStorage.getItem(STORAGE_KEYS.MONTHLY_PAYMENTS);
+        if (savedPayments) {
+          console.log('Loading saved payments:', savedPayments);
+          setMonthlyPayments(JSON.parse(savedPayments));
+        }
+      } catch (error) {
+        console.error('Error loading monthly payments:', error);
+      }
+    };
+
+    loadMonthlyPayments();
   }, []);
 
   // Изменяем обработчик добавления источника дохода
@@ -222,23 +238,60 @@ export default function HomeScreen() {
             : account
         ));
       } else if (params.action === 'add_payment') {
-        setMonthlyPayments(prev => [...prev, {
+        const newPayment = {
           id: params.id!,
           name: params.name!,
           currency: params.currency!,
           amount: Number(params.amount),
-        }]);
+        };
+        
+        const updateMonthlyPayments = async () => {
+          try {
+            const savedPaymentsJson = await AsyncStorage.getItem(STORAGE_KEYS.MONTHLY_PAYMENTS);
+            const savedPayments = savedPaymentsJson ? JSON.parse(savedPaymentsJson) : [];
+            
+            const exists = savedPayments.some(payment => payment.id === newPayment.id);
+            if (exists) {
+              return;
+            }
+
+            const updatedPayments = [...savedPayments, newPayment];
+            
+            await AsyncStorage.setItem(STORAGE_KEYS.MONTHLY_PAYMENTS, JSON.stringify(updatedPayments));
+            setMonthlyPayments(updatedPayments);
+            
+            console.log('Successfully saved and updated monthly payments:', updatedPayments);
+          } catch (error) {
+            console.error('Error updating monthly payments:', error);
+          }
+        };
+
+        updateMonthlyPayments();
       } else if (params.action === 'edit_payment') {
-        setMonthlyPayments(prev => prev.map(payment => 
-          payment.id === params.id 
-            ? {
-                id: params.id!,
-                name: params.name!,
-                currency: params.currency!,
-                amount: Number(params.amount),
-              }
-            : payment
-        ));
+        const updateEditedPayment = async () => {
+          try {
+            const savedPaymentsJson = await AsyncStorage.getItem(STORAGE_KEYS.MONTHLY_PAYMENTS);
+            const savedPayments = savedPaymentsJson ? JSON.parse(savedPaymentsJson) : [];
+            
+            const updatedPayments = savedPayments.map(payment => 
+              payment.id === params.id 
+                ? {
+                    id: params.id!,
+                    name: params.name!,
+                    currency: params.currency!,
+                    amount: Number(params.amount),
+                  }
+                : payment
+            );
+            
+            await AsyncStorage.setItem(STORAGE_KEYS.MONTHLY_PAYMENTS, JSON.stringify(updatedPayments));
+            setMonthlyPayments(updatedPayments);
+          } catch (error) {
+            console.error('Error updating edited payment:', error);
+          }
+        };
+
+        updateEditedPayment();
       }
       
       // Очищаем параметры после обработки
@@ -270,7 +323,24 @@ export default function HomeScreen() {
         { 
           text: 'Удалить',
           style: 'destructive',
-          onPress: () => setIncomeSources(prev => prev.filter(source => source.id !== id))
+          onPress: async () => {
+            try {
+              // Получаем текущие источники дохода из AsyncStorage
+              const savedSourcesJson = await AsyncStorage.getItem(STORAGE_KEYS.INCOME_SOURCES);
+              const savedSources = savedSourcesJson ? JSON.parse(savedSourcesJson) : [];
+              
+              // Фильтруем источники, удаляя выбранный
+              const updatedSources = savedSources.filter(source => source.id !== id);
+              
+              // Сохраняем обновленный список в AsyncStorage
+              await AsyncStorage.setItem(STORAGE_KEYS.INCOME_SOURCES, JSON.stringify(updatedSources));
+              
+              // Обновляем состояние компонента
+              setIncomeSources(updatedSources);
+            } catch (error) {
+              console.error('Error deleting income source:', error);
+            }
+          }
         },
       ]
     );
@@ -285,7 +355,19 @@ export default function HomeScreen() {
         { 
           text: 'Удалить',
           style: 'destructive',
-          onPress: () => setMonthlyPayments(prev => prev.filter(payment => payment.id !== id))
+          onPress: async () => {
+            try {
+              const savedPaymentsJson = await AsyncStorage.getItem(STORAGE_KEYS.MONTHLY_PAYMENTS);
+              const savedPayments = savedPaymentsJson ? JSON.parse(savedPaymentsJson) : [];
+              
+              const updatedPayments = savedPayments.filter(payment => payment.id !== id);
+              
+              await AsyncStorage.setItem(STORAGE_KEYS.MONTHLY_PAYMENTS, JSON.stringify(updatedPayments));
+              setMonthlyPayments(updatedPayments);
+            } catch (error) {
+              console.error('Error deleting payment:', error);
+            }
+          }
         },
       ]
     );
