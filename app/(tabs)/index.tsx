@@ -2,6 +2,7 @@ import { StyleSheet, FlatList, Pressable, Alert, View } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -51,6 +52,7 @@ export default function HomeScreen() {
   ]);
 
   const { displayCurrency, exchangeRates, isLoading } = useSettings();
+  const colorScheme = useColorScheme();
 
   // Вычисляем, какие счета показывать
   const visibleAccounts = isExpanded 
@@ -71,6 +73,19 @@ export default function HomeScreen() {
       return total + convertedAmount;
     }
     return total + (income.currency === displayCurrency ? income.amount : 0);
+  }, 0);
+
+  const totalBalance = accounts.reduce((total, account) => {
+    if (exchangeRates) {
+      const convertedAmount = convertAmount(
+        account.balance,
+        account.currency,
+        displayCurrency,
+        exchangeRates
+      );
+      return total + convertedAmount;
+    }
+    return total + account.balance;
   }, 0);
 
   useEffect(() => {
@@ -176,6 +191,25 @@ export default function HomeScreen() {
     }, 0);
   };
 
+  const renderAmount = (amount: number, currency: string) => {
+    const convertedAmount = exchangeRates 
+      ? convertAmount(amount, currency, displayCurrency, exchangeRates)
+      : amount;
+
+    return (
+      <View>
+        <ThemedText type="defaultSemiBold">
+          {amount.toLocaleString()} {currency}
+        </ThemedText>
+        {currency !== displayCurrency && exchangeRates && (
+          <ThemedText style={styles.convertedAmount}>
+            ≈ {convertedAmount.toLocaleString()} {displayCurrency}
+          </ThemedText>
+        )}
+      </View>
+    );
+  };
+
   const renderAccount = ({ item, index }: { item: Account; index: number }) => {
     const convertedBalance = exchangeRates && item.currency !== displayCurrency
       ? convertAmount(
@@ -201,20 +235,7 @@ export default function HomeScreen() {
       >
         <ThemedView style={styles.accountHeader}>
           <ThemedText type="subtitle">{item.name}</ThemedText>
-          <ThemedText type="defaultSemiBold">{item.currency}</ThemedText>
-        </ThemedView>
-        <ThemedView>
-          <ThemedText type="title">
-            {item.balance.toLocaleString()} {item.currency}
-          </ThemedText>
-          {convertedBalance !== null && item.currency !== displayCurrency && (
-            <ThemedText style={styles.convertedAmount}>
-              ≈ {convertedBalance.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2
-              })} {displayCurrency}
-            </ThemedText>
-          )}
+          {renderAmount(item.balance, item.currency)}
         </ThemedView>
       </Pressable>
     );
@@ -245,88 +266,58 @@ export default function HomeScreen() {
       >
         <ThemedView style={styles.accountHeader}>
           <ThemedText type="subtitle">{item.name}</ThemedText>
-          <ThemedText type="defaultSemiBold">{item.currency}</ThemedText>
-        </ThemedView>
-        <ThemedView>
-          <ThemedText type="title">
-            {item.amount.toLocaleString()} {item.currency}
-          </ThemedText>
-          {convertedAmount !== null && item.currency !== displayCurrency && (
-            <ThemedText style={styles.convertedAmount}>
-              ≈ {convertedAmount.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2
-              })} {displayCurrency}
-            </ThemedText>
-          )}
+          {renderAmount(item.amount, item.currency)}
         </ThemedView>
       </Pressable>
     );
   };
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top + 16, paddingHorizontal: 16 }]}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title">Счета</ThemedText>
-        <Pressable onPress={() => router.push('/account-form')}>
-          <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
-        </Pressable>
-      </ThemedView>
-
-      <ThemedView style={styles.totalContainer}>
-        <ThemedText type="subtitle">Общий баланс</ThemedText>
-        {isLoading ? (
-          <ThemedText>Загрузка курсов валют...</ThemedText>
-        ) : (
-          <ThemedText type="title">
-            {calculateTotalBalance(accounts, displayCurrency, exchangeRates).toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-              minimumFractionDigits: 2
-            })} {displayCurrency}
-          </ThemedText>
-        )}
-      </ThemedView>
-      
-      <ThemedView style={styles.totalContainer}>
-        <ThemedText type="subtitle">Общая сумма доходов</ThemedText>
-        <ThemedText type="title">{totalIncome.toLocaleString()} {displayCurrency}</ThemedText>
-      </ThemedView>
-
-      <ThemedView style={styles.accountsContainer}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+      <ThemedView style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <ThemedText type="subtitle">Счета</ThemedText>
+            <ThemedText style={styles.totalBalance}>
+              Всего: {totalBalance.toLocaleString()} {displayCurrency}
+            </ThemedText>
+          </View>
+          <Pressable onPress={() => router.push('/account-form')}>
+            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+          </Pressable>
+        </View>
         {visibleAccounts.map((account, index) => (
           <View key={account.id}>
             {renderAccount({ item: account, index })}
           </View>
         ))}
-        
         {hasHiddenAccounts && (
-          <Pressable 
+          <Pressable
             onPress={() => setIsExpanded(!isExpanded)}
             style={({ pressed }) => [
               styles.expandButton,
               pressed && styles.expandButtonPressed
             ]}
           >
-            <ThemedText type="defaultSemiBold">
-              {isExpanded ? 'Свернуть' : `Показать еще ${accounts.length - INITIAL_VISIBLE_ACCOUNTS}`}
+            <ThemedText type="link">
+              {isExpanded ? 'Скрыть' : `Показать ещё ${accounts.length - INITIAL_VISIBLE_ACCOUNTS}`}
             </ThemedText>
-            <IconSymbol 
-              name={isExpanded ? "chevron.up" : "chevron.down"} 
-              size={20} 
-              color={Colors[colorScheme ?? 'light'].text} 
-            />
           </Pressable>
         )}
       </ThemedView>
 
       <ThemedView style={styles.section}>
-        <ThemedView style={styles.sectionHeader}>
-          <ThemedText type="title">Источники дохода</ThemedText>
+        <View style={styles.sectionHeader}>
+          <View>
+            <ThemedText type="subtitle">Источники дохода</ThemedText>
+            <ThemedText style={styles.totalIncome}>
+              Всего: {totalIncome.toLocaleString()} {displayCurrency}
+            </ThemedText>
+          </View>
           <Pressable onPress={() => router.push('/income-form')}>
             <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
           </Pressable>
-        </ThemedView>
-
+        </View>
         {incomeSources.map((source, index) => (
           <View key={source.id}>
             {renderIncomeSource({ item: source, index })}
@@ -403,5 +394,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  accountItem: {
+    padding: 16,
+    backgroundColor: Colors.light.background,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  accountItemPressed: {
+    opacity: 0.7,
+  },
+  totalIncome: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
+  },
+  totalBalance: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
   },
 });
