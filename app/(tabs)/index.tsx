@@ -1,9 +1,10 @@
-import { StyleSheet, FlatList, Pressable, Alert, View } from 'react-native';
-import { useState, useEffect } from 'react';
+import { StyleSheet, FlatList, Pressable, Alert, View, ScrollView } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -518,77 +519,105 @@ export default function HomeScreen() {
     );
   };
 
+  // Добавляем ref для ScrollView
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
+
+  // Добавляем обработчик скролла
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setScrollPosition(event.nativeEvent.contentOffset.y);
+  };
+
+  // Восстанавливаем позицию скролла после обновления данных
+  useEffect(() => {
+    if (scrollViewRef.current && scrollPosition > 0) {
+      scrollViewRef.current.scrollTo({ y: scrollPosition, animated: false });
+    }
+  }, [incomeSources, monthlyPayments, accounts]);
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
-      <ThemedView style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <ThemedText type="subtitle">Счета</ThemedText>
-            <ThemedText style={styles.totalBalance}>
-              Всего: {totalBalance.toLocaleString()} {displayCurrency}
-            </ThemedText>
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+        }}
+      >
+        <ThemedView style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <ThemedText type="subtitle">Счета</ThemedText>
+              <ThemedText style={styles.totalBalance}>
+                Всего: {totalBalance.toLocaleString()} {displayCurrency}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => router.push('/account-form')}>
+              <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+            </Pressable>
           </View>
-          <Pressable onPress={() => router.push('/account-form')}>
-            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
-          </Pressable>
-        </View>
-        {visibleAccounts.map((account, index) => (
-          <View key={account.id}>
-            {renderAccount({ item: account, index })}
-          </View>
-        ))}
-        {hasHiddenAccounts && (
-          <Pressable
-            onPress={() => setIsExpanded(!isExpanded)}
-            style={({ pressed }) => [
-              styles.expandButton,
-              pressed && styles.expandButtonPressed
-            ]}
-          >
-            <ThemedText type="link">
-              {isExpanded ? 'Скрыть' : `Показать ещё ${accounts.length - INITIAL_VISIBLE_ACCOUNTS}`}
-            </ThemedText>
-          </Pressable>
-        )}
-      </ThemedView>
+          {visibleAccounts.map((account, index) => (
+            <View key={account.id}>
+              {renderAccount({ item: account, index })}
+            </View>
+          ))}
+          {hasHiddenAccounts && (
+            <Pressable
+              onPress={() => setIsExpanded(!isExpanded)}
+              style={({ pressed }) => [
+                styles.expandButton,
+                pressed && styles.expandButtonPressed
+              ]}
+            >
+              <ThemedText type="link">
+                {isExpanded ? 'Скрыть' : `Показать ещё ${accounts.length - INITIAL_VISIBLE_ACCOUNTS}`}
+              </ThemedText>
+            </Pressable>
+          )}
+        </ThemedView>
 
-      <ThemedView style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <ThemedText type="subtitle">Источники дохода</ThemedText>
-            <ThemedText style={styles.totalIncome}>
-              Всего: {totalIncome.toLocaleString()} {displayCurrency}
-            </ThemedText>
+        <ThemedView style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <ThemedText type="subtitle">Источники дохода</ThemedText>
+              <ThemedText style={styles.totalIncome}>
+                Всего: {totalIncome.toLocaleString()} {displayCurrency}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => router.push('/income-form')}>
+              <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+            </Pressable>
           </View>
-          <Pressable onPress={() => router.push('/income-form')}>
-            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
-          </Pressable>
-        </View>
-        {incomeSources.map((source, index) => (
-          <View key={source.id}>
-            {renderIncomeSource({ item: source, index })}
-          </View>
-        ))}
-      </ThemedView>
+          {incomeSources.map((source, index) => (
+            <View key={source.id}>
+              {renderIncomeSource({ item: source, index })}
+            </View>
+          ))}
+        </ThemedView>
 
-      <ThemedView style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <ThemedText type="subtitle">Ежемесячные платежи</ThemedText>
-            <ThemedText style={styles.totalPayments}>
-              Всего: {totalMonthlyPayments.toLocaleString()} {displayCurrency}
-            </ThemedText>
+        <ThemedView style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <ThemedText type="subtitle">Ежемесячные платежи</ThemedText>
+              <ThemedText style={styles.totalPayments}>
+                Всего: {totalMonthlyPayments.toLocaleString()} {displayCurrency}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => router.push('/payment-form')}>
+              <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
+            </Pressable>
           </View>
-          <Pressable onPress={() => router.push('/payment-form')}>
-            <IconSymbol name="plus" size={24} color={Colors[colorScheme ?? 'light'].text} />
-          </Pressable>
-        </View>
-        {monthlyPayments.map((payment, index) => (
-          <View key={payment.id}>
-            {renderPayment({ item: payment, index })}
-          </View>
-        ))}
-      </ThemedView>
+          {monthlyPayments.map((payment, index) => (
+            <View key={payment.id}>
+              {renderPayment({ item: payment, index })}
+            </View>
+          ))}
+        </ThemedView>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -685,5 +714,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.secondaryText,
     marginTop: 4,
+  },
+  scrollContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
 });
