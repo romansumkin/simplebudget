@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -11,6 +12,7 @@ import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 const CURRENCIES = ['RUB', 'USD', 'EUR', 'GBP', 'CNY'];
+const STORAGE_KEY = 'accounts';
 
 export default function AccountFormScreen() {
   const router = useRouter();
@@ -28,7 +30,7 @@ export default function AccountFormScreen() {
   const [balance, setBalance] = useState(params.balance ?? '0');
   const [showCurrencies, setShowCurrencies] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Ошибка', 'Введите название счета');
       return;

@@ -49,7 +49,8 @@ const INITIAL_VISIBLE_ACCOUNTS = 4;
 const STORAGE_KEYS = {
   INCOME_SOURCES: 'incomeSources',
   MONTHLY_PAYMENTS: 'monthlyPayments',
-  EXPENSES: 'expenses'
+  EXPENSES: 'expenses',
+  ACCOUNTS: 'accounts'
 };
 
 export default function HomeScreen() {
@@ -66,10 +67,7 @@ export default function HomeScreen() {
     category?: string;
   }>();
 
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: '1', name: 'Наличные', currency: 'RUB', balance: 10000 },
-    { id: '2', name: 'Банк', currency: 'RUB', balance: 50000 },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
@@ -197,6 +195,71 @@ export default function HomeScreen() {
 
     loadExpenses();
   }, []); // Выполнится один раз при монтировании
+
+  // Загрузка счетов при монтировании компонента
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const savedAccountsJson = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+        if (savedAccountsJson) {
+          const savedAccounts = JSON.parse(savedAccountsJson);
+          setAccounts(savedAccounts);
+        }
+      } catch (error) {
+        console.error('Error loading accounts:', error);
+      }
+    };
+
+    loadAccounts();
+  }, []);
+
+  // Обработка параметров для счетов
+  useEffect(() => {
+    if (params.action === 'add' || params.action === 'edit') {
+      const newAccount = {
+        id: params.id!,
+        name: params.name!,
+        currency: params.currency!,
+        balance: Number(params.balance),
+      };
+
+      const updateAccounts = async () => {
+        try {
+          const savedAccountsJson = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+          const savedAccounts = savedAccountsJson ? JSON.parse(savedAccountsJson) : [];
+
+          let updatedAccounts;
+          if (params.action === 'edit') {
+            updatedAccounts = savedAccounts.map(account => 
+              account.id === newAccount.id ? newAccount : account
+            );
+          } else {
+            const exists = savedAccounts.some(account => account.id === newAccount.id);
+            if (exists) {
+              return;
+            }
+            updatedAccounts = [...savedAccounts, newAccount];
+          }
+
+          await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
+          setAccounts(updatedAccounts);
+        } catch (error) {
+          console.error('Error updating accounts:', error);
+        }
+      };
+
+      updateAccounts();
+      router.setParams({}); // Очищаем параметры после обработки
+    }
+  }, [params.action, params.id, params.name, params.currency, params.balance]);
+
+  // Изменяем обработку параметров в useEffect
+  useEffect(() => {
+    if (params.action === 'add' || params.action === 'edit') {
+      // Очищаем параметры после обработки
+      router.setParams({});
+    }
+  }, [params.action, params.id, params.name, params.currency, params.balance]);
 
   // Исправляем обработчик параметров для расходов
   useEffect(() => {
@@ -382,13 +445,10 @@ export default function HomeScreen() {
 
         updateEditedPayment();
       }
-      
-      // Очищаем параметры после обработки
-      router.setParams({});
     }
   }, [params.action, params.id, params.name, params.currency, params.amount, params.category]);
 
-  const handleDelete = (id: string) => {
+  const handleDeleteAccount = (id: string) => {
     Alert.alert(
       'Удаление счета',
       'Вы уверены, что хотите удалить этот счет?',
@@ -397,7 +457,15 @@ export default function HomeScreen() {
         { 
           text: 'Удалить',
           style: 'destructive',
-          onPress: () => setAccounts(prev => prev.filter(account => account.id !== id))
+          onPress: async () => {
+            try {
+              const updatedAccounts = accounts.filter(account => account.id !== id);
+              await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
+              setAccounts(updatedAccounts);
+            } catch (error) {
+              console.error('Error deleting account:', error);
+            }
+          }
         },
       ]
     );
@@ -519,7 +587,7 @@ export default function HomeScreen() {
           pathname: '/account-form',
           params: item
         })}
-        onLongPress={() => handleDelete(item.id)}
+        onLongPress={() => handleDeleteAccount(item.id)}
         style={({ pressed }) => [
           styles.accountCard,
           index > 0 && styles.accountCardBorder,
